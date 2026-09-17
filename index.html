@@ -26,7 +26,6 @@
   <main id="desktop"></main>
   <div id="status">WebDE ready</div>
   <script>
-    // WebDE's 1,000-character RAM. Unused cells contain backslashes.
     const RAM_SIZE = 1000;
     let memory = "\\".repeat(RAM_SIZE);
     let memoryPointer = 0;
@@ -127,11 +126,7 @@
         handle.addEventListener("pointerdown", event => {
           if (event.button !== 0 || event.target.closest(".close-button") || el.classList.contains("fullscreen")) return;
           const rect = el.getBoundingClientRect();
-          drag = {
-            pointerId: event.pointerId,
-            offsetX: event.clientX - rect.left,
-            offsetY: event.clientY - rect.top
-          };
+          drag = { pointerId: event.pointerId, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
           handle.classList.add("dragging");
           el.style.zIndex = ++app._z;
           handle.setPointerCapture(event.pointerId);
@@ -161,7 +156,6 @@
         handle.addEventListener("pointercancel", stopDrag);
         handle.addEventListener("lostpointercapture", stopDrag);
 
-        // Clicking anywhere on a window focuses it without starting a drag.
         el.addEventListener("pointerdown", event => {
           if (!event.target.closest(".close-button")) el.style.zIndex = ++app._z;
         });
@@ -181,9 +175,10 @@
     window.app = app;
     window.sys = sys;
     window.WebDE = { app, sys, get memory() { return memory; } };
-
-    // No demo application is created here. Apps are created by ui.js or other code.
     updateStatus();
   </script>
+
+  <!-- ui.js is the sample program and is executed after the WebDE API exists. -->
+  <script src="ui.js"></script>
 </body>
 </html>
