@@ -7,14 +7,14 @@
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; font-family: Arial, sans-serif; background: #202124; color: #fff; }
-    #desktop { position: relative; width: 100%; height: 100%; background: linear-gradient(135deg,#303134,#202124); overflow: hidden; }
+    #desktop { position: relative; width: 100%; height: 100%; background: linear-gradient(135deg,#303134,#202124); }
     .window { position: absolute; min-width: 180px; min-height: 100px; background: #fff; color: #111; border: 1px solid #777; box-shadow: 0 8px 24px #0008; overflow: hidden; }
     .window.borderless { border: 0; }
     .window.fullscreen { inset: 0 !important; width: 100% !important; height: 100% !important; }
     .titlebar { height: 32px; padding: 0 6px 0 10px; display: flex; align-items: center; gap: 8px; background: #333; color: #fff; font-size: 13px; user-select: none; cursor: grab; touch-action: none; }
     .titlebar.dragging { cursor: grabbing; }
-    .title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
-    .close-button { width: 26px; height: 24px; flex: 0 0 26px; border: 0; padding: 0; background: transparent; color: #fff; font-family: Wingdings, Webdings, sans-serif; font-size: 16px; line-height: 24px; cursor: pointer; touch-action: manipulation; }
+    .title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .close-button { width: 26px; height: 24px; flex: 0 0 26px; border: 0; padding: 0; background: transparent; color: #fff; font-family: Wingdings, Webdings, sans-serif; font-size: 16px; line-height: 24px; cursor: pointer; }
     .close-button:hover { background: #c00; }
     .content { width: 100%; height: calc(100% - 32px); overflow: auto; padding: 12px; }
     .window.borderless .titlebar { display: none; }
@@ -24,7 +24,7 @@
 </head>
 <body>
   <main id="desktop"></main>
-  <div id="status">WebDE booting...</div>
+  <div id="status">WebDE ready</div>
   <script>
     // WebDE's 1,000-character RAM. Unused cells contain backslashes.
     const RAM_SIZE = 1000;
@@ -35,11 +35,10 @@
     const status = document.getElementById("status");
 
     function usedRam() {
-      return Object.values(apps).reduce((n, app) => n + app.html.length, 0);
+      return Object.values(apps).reduce((n, a) => n + a.html.length, 0);
     }
 
     function writeMemory(text) {
-      // Circular memory: when RAM is exhausted, start overwriting at byte 0.
       for (const char of text) {
         memory = memory.slice(0, memoryPointer) + char + memory.slice(memoryPointer + 1);
         memoryPointer = (memoryPointer + 1) % RAM_SIZE;
@@ -50,63 +49,8 @@
       status.textContent = `RAM: ${sys.ramLeft()} digits left`;
     }
 
-    // Window dragging uses document-level pointer events. This prevents the
-    // window from getting stuck when the pointer leaves the title bar.
-    function makeDraggable(el, handle) {
-      let dragging = false;
-      let pointerId = null;
-      let grabX = 0;
-      let grabY = 0;
-      let startLeft = 0;
-      let startTop = 0;
-
-      handle.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0) return;
-        if (event.target.closest(".close-button")) return;
-        if (el.classList.contains("fullscreen")) return;
-
-        const desktopRect = desktop.getBoundingClientRect();
-        const windowRect = el.getBoundingClientRect();
-
-        dragging = true;
-        pointerId = event.pointerId;
-        grabX = event.clientX - windowRect.left;
-        grabY = event.clientY - windowRect.top;
-        startLeft = windowRect.left - desktopRect.left;
-        startTop = windowRect.top - desktopRect.top;
-
-        el.style.zIndex = ++app._z;
-        handle.classList.add("dragging");
-        handle.setPointerCapture?.(pointerId);
-        event.preventDefault();
-      });
-
-      document.addEventListener("pointermove", (event) => {
-        if (!dragging || event.pointerId !== pointerId) return;
-
-        const desktopRect = desktop.getBoundingClientRect();
-        const newLeft = event.clientX - desktopRect.left - grabX;
-        const newTop = event.clientY - desktopRect.top - grabY;
-        const maxLeft = Math.max(0, desktop.clientWidth - el.offsetWidth);
-        const maxTop = Math.max(0, desktop.clientHeight - el.offsetHeight);
-
-        el.style.left = `${Math.max(0, Math.min(newLeft, maxLeft))}px`;
-        el.style.top = `${Math.max(0, Math.min(newTop, maxTop))}px`;
-      });
-
-      const stopDragging = (event) => {
-        if (!dragging || event.pointerId !== pointerId) return;
-        dragging = false;
-        pointerId = null;
-        handle.classList.remove("dragging");
-        try { handle.releasePointerCapture?.(event.pointerId); } catch (_) {}
-      };
-
-      document.addEventListener("pointerup", stopDragging);
-      document.addEventListener("pointercancel", stopDragging);
-    }
-
     const app = {
+      _z: 1,
       open(id) {
         const a = apps[id];
         if (!a) return false;
@@ -137,8 +81,7 @@
       border(id) {
         const a = apps[id]; if (!a) return false;
         a.el.classList.remove("borderless"); return true;
-      },
-      _z: 1
+      }
     };
 
     const sys = {
@@ -147,7 +90,7 @@
         setTimeout(() => location.reload(), Math.max(0, Number(timebeforereboot) || 0));
       },
       newApp(title, html, bordlerless = false, fullscreen = false, id) {
-        id = id || `app-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+        id = id || `app-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         const source = String(html ?? "");
         writeMemory(source);
 
@@ -171,11 +114,57 @@
         if (fullscreen) el.classList.add("fullscreen");
         el.style.display = "none";
 
-        el.querySelector(".close-button").addEventListener("click", (event) => {
+        const closeButton = el.querySelector(".close-button");
+        closeButton.addEventListener("pointerdown", event => event.stopPropagation());
+        closeButton.addEventListener("click", event => {
           event.stopPropagation();
           app.close(id);
         });
-        makeDraggable(el, el.querySelector(".titlebar"));
+
+        const handle = el.querySelector(".titlebar");
+        let drag = null;
+
+        handle.addEventListener("pointerdown", event => {
+          if (event.button !== 0 || event.target.closest(".close-button") || el.classList.contains("fullscreen")) return;
+          const rect = el.getBoundingClientRect();
+          drag = {
+            pointerId: event.pointerId,
+            offsetX: event.clientX - rect.left,
+            offsetY: event.clientY - rect.top
+          };
+          handle.classList.add("dragging");
+          el.style.zIndex = ++app._z;
+          handle.setPointerCapture(event.pointerId);
+          event.preventDefault();
+        });
+
+        handle.addEventListener("pointermove", event => {
+          if (!drag || event.pointerId !== drag.pointerId) return;
+          const desktopRect = desktop.getBoundingClientRect();
+          let left = event.clientX - desktopRect.left - drag.offsetX;
+          let top = event.clientY - desktopRect.top - drag.offsetY;
+          const maxLeft = Math.max(0, desktop.clientWidth - el.offsetWidth);
+          const maxTop = Math.max(0, desktop.clientHeight - el.offsetHeight);
+          left = Math.max(0, Math.min(left, maxLeft));
+          top = Math.max(0, Math.min(top, maxTop));
+          el.style.left = `${left}px`;
+          el.style.top = `${top}px`;
+        });
+
+        const stopDrag = event => {
+          if (!drag || (event.pointerId != null && event.pointerId !== drag.pointerId)) return;
+          try { handle.releasePointerCapture(drag.pointerId); } catch (_) {}
+          drag = null;
+          handle.classList.remove("dragging");
+        };
+        handle.addEventListener("pointerup", stopDrag);
+        handle.addEventListener("pointercancel", stopDrag);
+        handle.addEventListener("lostpointercapture", stopDrag);
+
+        // Clicking anywhere on a window focuses it without starting a drag.
+        el.addEventListener("pointerdown", event => {
+          if (!event.target.closest(".close-button")) el.style.zIndex = ++app._z;
+        });
 
         desktop.appendChild(el);
         apps[id] = { id, title: String(title ?? "App"), html: source, el };
@@ -193,9 +182,7 @@
     window.sys = sys;
     window.WebDE = { app, sys, get memory() { return memory; } };
 
-    // Demo app. It is created, then opened by its ID.
-    const demoId = sys.newApp("Demo App", "<h1>App.</h1><p>This app lives in WebDE RAM.</p>");
-    app.open(demoId);
+    // No demo application is created here. Apps are created by ui.js or other code.
     updateStatus();
   </script>
 </body>
