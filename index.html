@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WebDE</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; font-family: Arial, sans-serif; background: #202124; color: #fff; }
+    #desktop { position: relative; width: 100%; height: 100%; background: linear-gradient(135deg,#303134,#202124); }
+    .window { position: absolute; min-width: 180px; min-height: 100px; background: #fff; color: #111; border: 1px solid #777; box-shadow: 0 8px 24px #0008; overflow: hidden; }
+    .window.borderless { border: 0; }
+    .window.fullscreen { inset: 0 !important; width: 100% !important; height: 100% !important; }
+    .titlebar { height: 30px; padding: 6px 9px; background: #333; color: #fff; font-size: 13px; user-select: none; }
+    .content { width: 100%; height: calc(100% - 30px); overflow: auto; padding: 12px; }
+    .window.borderless .titlebar { display: none; }
+    .window.borderless .content { height: 100%; }
+    #status { position: fixed; left: 10px; bottom: 10px; padding: 6px 9px; font: 12px monospace; background: #000b; border-radius: 4px; z-index: 999999; }
+  </style>
+</head>
+<body>
+  <main id="desktop"></main>
+  <div id="status">WebDE booting...</div>
+  <script>
+    // WebDE's 1,000-character RAM. Unused cells contain backslashes.
+    const RAM_SIZE = 1000;
+    let memory = "\\".repeat(RAM_SIZE);
+    let memoryPointer = 0;
+    const apps = Object.create(null);
+    const desktop = document.getElementById("desktop");
+    const status = document.getElementById("status");
+
+    function usedRam() {
+      return Object.values(apps).reduce((n, app) => n + app.html.length, 0);
+    }
+
+    function writeMemory(text) {
+      // Circular memory: when RAM is exhausted, start overwriting at byte 0.
+      for (const char of text) {
+        memory = memory.slice(0, memoryPointer) + char + memory.slice(memoryPointer + 1);
+        memoryPointer = (memoryPointer + 1) % RAM_SIZE;
+      }
+    }
+
+    function updateStatus() {
+      status.textContent = `RAM: ${sys.ramLeft()} digits left`;
+    }
+
+    const app = {
+      open(id) {
+        const a = apps[id];
+        if (!a) return false;
+        a.el.style.display = "block";
+        a.el.style.zIndex = ++app._z;
+        return true;
+      },
+      close(id) {
+        const a = apps[id];
+        if (!a) return false;
+        a.el.remove();
+        delete apps[id];
+        updateStatus();
+        return true;
+      },
+      fullscreen(id) {
+        const a = apps[id]; if (!a) return false;
+        a.el.classList.add("fullscreen"); return true;
+      },
+      borderless(id) {
+        const a = apps[id]; if (!a) return false;
+        a.el.classList.add("borderless"); return true;
+      },
+      windowed(id) {
+        const a = apps[id]; if (!a) return false;
+        a.el.classList.remove("fullscreen"); return true;
+      },
+      border(id) {
+        const a = apps[id]; if (!a) return false;
+        a.el.classList.remove("borderless"); return true;
+      },
+      _z: 1
+    };
+
+    const sys = {
+      reboot(reason = "No reason supplied", timebeforereboot = 0) {
+        status.textContent = `Rebooting: ${reason}`;
+        setTimeout(() => location.reload(), Math.max(0, Number(timebeforereboot) || 0));
+      },
+      newApp(title, html, bordlerless = false, fullscreen = false, id) {
+        id = id || `app-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+        const source = String(html ?? "");
+        writeMemory(source);
+
+        const el = document.createElement("section");
+        el.className = "window";
+        el.style.left = `${40 + Object.keys(apps).length * 24}px`;
+        el.style.top = `${40 + Object.keys(apps).length * 24}px`;
+        el.style.width = "420px";
+        el.style.height = "280px";
+        el.innerHTML = `<div class="titlebar"></div><div class="content"></div>`;
+        el.querySelector(".titlebar").textContent = String(title ?? "App");
+        el.querySelector(".content").innerHTML = source;
+        if (bordlerless) el.classList.add("borderless");
+        if (fullscreen) el.classList.add("fullscreen");
+        el.style.display = "none";
+        desktop.appendChild(el);
+        apps[id] = { id, title: String(title ?? "App"), html: source, el };
+        updateStatus();
+        return id;
+      }
+    };
+
+    sys.ramLeft = function(percentage = false) {
+      const left = Math.max(0, RAM_SIZE - Math.min(RAM_SIZE, usedRam()));
+      return percentage ? `${((left / RAM_SIZE) * 100).toFixed(1)}%` : left;
+    };
+
+    window.app = app;
+    window.sys = sys;
+    window.WebDE = { app, sys, get memory() { return memory; } };
+
+    // Demo app. It is created, then opened by its ID.
+    const demoId = sys.newApp("Demo App", "<h1>App.</h1><p>This app lives in WebDE RAM.</p>");
+    app.open(demoId);
+    updateStatus();
+  </script>
+</body>
+</html>
