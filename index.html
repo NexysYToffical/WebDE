@@ -11,8 +11,11 @@
     .window { position: absolute; min-width: 180px; min-height: 100px; background: #fff; color: #111; border: 1px solid #777; box-shadow: 0 8px 24px #0008; overflow: hidden; }
     .window.borderless { border: 0; }
     .window.fullscreen { inset: 0 !important; width: 100% !important; height: 100% !important; }
-    .titlebar { height: 30px; padding: 6px 9px; background: #333; color: #fff; font-size: 13px; user-select: none; }
-    .content { width: 100%; height: calc(100% - 30px); overflow: auto; padding: 12px; }
+    .titlebar { height: 32px; padding: 0 6px 0 10px; display: flex; align-items: center; gap: 8px; background: #333; color: #fff; font-size: 13px; user-select: none; cursor: move; }
+    .title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .close-button { width: 26px; height: 24px; flex: 0 0 26px; border: 0; padding: 0; background: transparent; color: #fff; font-family: Wingdings, Webdings, sans-serif; font-size: 16px; line-height: 24px; cursor: pointer; }
+    .close-button:hover { background: #c00; }
+    .content { width: 100%; height: calc(100% - 32px); overflow: auto; padding: 12px; }
     .window.borderless .titlebar { display: none; }
     .window.borderless .content { height: 100%; }
     #status { position: fixed; left: 10px; bottom: 10px; padding: 6px 9px; font: 12px monospace; background: #000b; border-radius: 4px; z-index: 999999; }
@@ -44,6 +47,40 @@
 
     function updateStatus() {
       status.textContent = `RAM: ${sys.ramLeft()} digits left`;
+    }
+
+    function makeDraggable(el, handle) {
+      let dragging = false;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.target.closest(".close-button") || el.classList.contains("fullscreen")) return;
+        dragging = true;
+        const rect = el.getBoundingClientRect();
+        offsetX = event.clientX - rect.left;
+        offsetY = event.clientY - rect.top;
+        el.setPointerCapture?.(event.pointerId);
+        el.style.zIndex = ++app._z;
+        event.preventDefault();
+      });
+
+      handle.addEventListener("pointermove", (event) => {
+        if (!dragging) return;
+        const desktopRect = desktop.getBoundingClientRect();
+        let left = event.clientX - desktopRect.left - offsetX;
+        let top = event.clientY - desktopRect.top - offsetY;
+        left = Math.max(0, Math.min(left, desktop.clientWidth - el.offsetWidth));
+        top = Math.max(0, Math.min(top, desktop.clientHeight - el.offsetHeight));
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+      });
+
+      handle.addEventListener("pointerup", (event) => {
+        dragging = false;
+        el.releasePointerCapture?.(event.pointerId);
+      });
+      handle.addEventListener("pointercancel", () => { dragging = false; });
     }
 
     const app = {
@@ -93,16 +130,30 @@
 
         const el = document.createElement("section");
         el.className = "window";
-        el.style.left = `${40 + Object.keys(apps).length * 24}px`;
-        el.style.top = `${40 + Object.keys(apps).length * 24}px`;
+        const offset = Object.keys(apps).length * 24;
+        el.style.left = `${40 + offset}px`;
+        el.style.top = `${40 + offset}px`;
         el.style.width = "420px";
         el.style.height = "280px";
-        el.innerHTML = `<div class="titlebar"></div><div class="content"></div>`;
-        el.querySelector(".titlebar").textContent = String(title ?? "App");
+        el.innerHTML = `
+          <div class="titlebar">
+            <div class="title"></div>
+            <button class="close-button" type="button" title="Close">r</button>
+          </div>
+          <div class="content"></div>
+        `;
+        el.querySelector(".title").textContent = String(title ?? "App");
         el.querySelector(".content").innerHTML = source;
         if (bordlerless) el.classList.add("borderless");
         if (fullscreen) el.classList.add("fullscreen");
         el.style.display = "none";
+
+        el.querySelector(".close-button").addEventListener("click", (event) => {
+          event.stopPropagation();
+          app.close(id);
+        });
+        makeDraggable(el, el.querySelector(".titlebar"));
+
         desktop.appendChild(el);
         apps[id] = { id, title: String(title ?? "App"), html: source, el };
         updateStatus();
