@@ -28,6 +28,8 @@ app.windowed(id);      // Leave fullscreen mode
 app.border(id);        // Restore the title bar/border
 ```
 
+Every normal window can be dragged by its title bar and has a Wingdings close button.
+
 ### System controls
 
 ```js
@@ -59,10 +61,31 @@ uses those characters at the current memory position, with the rest of the RAM r
 
 Memory is **circular**. When new app data reaches the end of the 1,000-character RAM, writing wraps around to position `0` and starts overwriting the oldest memory. Because of this, creating more app data than the RAM can hold intentionally behaves like a tiny circular memory buffer. Humanity has reinvented overwriting a buffer and called it an operating system. 🫠
 
-## Sample UI
+## ui.js
 
-`ui.js` contains a small example that creates an app with `sys.newApp()`, opens it with `app.open()`, and demonstrates RAM, fullscreen, and closing controls.
+`ui.js` is an actual sample program loaded automatically by `index.html`:
+
+```html
+<script src="ui.js"></script>
+```
+
+The important part is that `index.html` defines `window.app` and `window.sys` **before** loading `ui.js`. This means `ui.js` can immediately call `sys.newApp()` and `app.open()`.
+
+The sample creates an app with ID `hello`, opens it, and adds buttons demonstrating RAM, fullscreen, and closing. There is **no separate hard-coded demo app** in `index.html`.
+
+To make your own program, replace the contents of `ui.js` or create another JavaScript file and load it after the WebDE runtime:
+
+```html
+<script src="my-ui.js"></script>
+```
+
+Then use the global APIs:
+
+```js
+const id = sys.newApp("My Program", "<h1>Hello!</h1>", false, false, "my-program");
+app.open(id);
+```
 
 ## Running
 
-Open `index.html` in a browser. The page creates a demo app automatically and exposes the APIs globally as `app`, `sys`, and `WebDE`.
+Open `index.html` in a browser or deploy the repository with GitHub Pages. `index.html` boots the WebDE runtime first and then executes `ui.js` as the sample program.
